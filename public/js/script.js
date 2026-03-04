@@ -95,7 +95,6 @@ function renderTasks() {
     const taskDiv = document.createElement('div');
     taskDiv.className = 'task-item';
 
-    // Чекбокс
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = task.completed;
@@ -104,14 +103,12 @@ function renderTasks() {
       updateTask(task.id, { completed: checkbox.checked });
     });
 
-    // Текст задачи (кликабельный для редактирования)
     const textSpan = document.createElement('span');
     textSpan.className = 'task-text' + (task.completed ? ' completed' : '');
-    // ⚠️ Используем innerHTML для XSS (вставляем необработанный текст)
-    textSpan.innerHTML = task.text;
+    // ЗАМЕНА: вместо innerHTML используем textContent
+    textSpan.textContent = task.text;
     textSpan.addEventListener('click', () => startEditing(taskDiv, task, textSpan, checkbox));
 
-    // Кнопка удаления
     const deleteBtn = document.createElement('button');
     deleteBtn.textContent = 'Удалить';
     deleteBtn.classList.add('delete-task-btn');

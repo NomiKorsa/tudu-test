@@ -4,94 +4,126 @@ const router = express.Router();
 
 // GET /tasks?filter=all|active|completed&page=1&limit=5
 router.get('/', (req, res) => {
-  const { filter = 'all', page = 1, limit = 5 } = req.query;
+  let { filter = 'all', page = 1, limit = 5 } = req.query;
+
+  // Валидация и приведение к числам
+  page = parseInt(page, 10);
+  limit = parseInt(limit, 10);
+  if (isNaN(page) || page < 1) page = 1;
+  if (isNaN(limit) || limit < 1) limit = 5;
+  if (limit > 100) limit = 100; // защита от слишком больших лимитов
+
   const offset = (page - 1) * limit;
 
-  let whereClause = '';
-  if (filter === 'active') whereClause = 'WHERE completed = 0';
-  else if (filter === 'completed') whereClause = 'WHERE completed = 1';
+  let sql = 'SELECT * FROM tasks';
+  const params = [];
 
-  // ⚠️ Уязвимость SQL injection – строки конкатенируются напрямую
-  const sql = `SELECT * FROM tasks ${whereClause} ORDER BY id DESC LIMIT ${limit} OFFSET ${offset}`;
+  if (filter === 'active') {
+    sql += ' WHERE completed = ?';
+    params.push(0);
+  } else if (filter === 'completed') {
+    sql += ' WHERE completed = ?';
+    params.push(1);
+  }
 
-  db.all(sql, (err, rows) => {
+  sql += ' ORDER BY id DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  db.all(sql, params, (err, rows) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      console.error(err.message);
+      return res.status(500).json({ error: 'Database error' });
     }
     res.json(rows);
   });
 });
 
-// POST /tasks – создать задачу (mass assignment)
+// POST /tasks – создать задачу
 router.post('/', (req, res) => {
   const { text, completed = false } = req.body;
 
-  // ⚠️ Нет никакой валидации
+  // Проверка длины текста (защита от DoS)
+  if (!text || typeof text !== 'string' || text.length > 1000) {
+    return res.status(400).json({ error: 'Invalid task text (max 1000 chars)' });
+  }
+
   const completedInt = completed ? 1 : 0;
 
-  // ⚠️ Уязвимость SQL injection
-  const sql = `INSERT INTO tasks (text, completed) VALUES ('${text}', ${completedInt})`;
-
-  db.run(sql, function(err) {
+  const sql = 'INSERT INTO tasks (text, completed) VALUES (?, ?)';
+  db.run(sql, [text, completedInt], function(err) {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      console.error(err.message);
+      return res.status(500).json({ error: 'Database error' });
     }
-    res.json({ status: 'ok', message: 'Задача добавлена', id: this.lastID });
+    res.json({ status: 'ok', id: this.lastID });
   });
 });
 
 // PATCH /tasks/:id – обновить задачу
 router.patch('/:id', (req, res) => {
   const id = Number(req.params.id);
-  const { text, completed } = req.body;
+  if (isNaN(id) || id <= 0) {
+    return res.status(400).json({ error: 'Invalid ID' });
+  }
 
-  // Сначала получаем текущую задачу
-  db.get(`SELECT * FROM tasks WHERE id = ${id}`, (err, task) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!task) return res.status(404).json({ error: 'Задача не найдена' });
+  // Получаем текущую задачу (параметризовано)
+  db.get('SELECT * FROM tasks WHERE id = ?', [id], (err, task) => {
+    if (err) {
+      console.error(err.message);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
 
-    const newText = text !== undefined ? text : task.text;
-    const newCompleted = completed !== undefined ? (completed ? 1 : 0) : task.completed;
+    const newText = req.body.text !== undefined ? req.body.text : task.text;
+    const newCompleted = req.body.completed !== undefined ? (req.body.completed ? 1 : 0) : task.completed;
 
-    // ⚠️ Уязвимость SQL injection
-    const sql = `UPDATE tasks SET text = '${newText}', completed = ${newCompleted} WHERE id = ${id}`;
+    // Проверка длины текста
+    if (typeof newText !== 'string' || newText.length > 1000) {
+      return res.status(400).json({ error: 'Text too long (max 1000 chars)' });
+    }
 
-    db.run(sql, function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ status: 'ok', message: 'Задача обновлена' });
+    const sql = 'UPDATE tasks SET text = ?, completed = ? WHERE id = ?';
+    db.run(sql, [newText, newCompleted, id], function(err) {
+      if (err) {
+        console.error(err.message);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      res.json({ status: 'ok' });
     });
   });
 });
 
 // DELETE /tasks/completed – удалить все выполненные
 router.delete('/completed', (req, res) => {
-  console.log('➡️ DELETE /tasks/completed запрос получен');
   const sql = 'DELETE FROM tasks WHERE completed = 1';
-
-  db.run(sql, function(err) {
+  db.run(sql, [], function(err) {
     if (err) {
-      console.error('❌ Ошибка SQL:', err.message);
-      return res.status(500).json({ error: err.message });
+      console.error(err.message);
+      return res.status(500).json({ error: 'Database error' });
     }
-    console.log(`✅ Удалено строк: ${this.changes}`);
-    res.json({
-      status: 'ok',
-      message: 'Все выполненные задачи удалены',
-      deleted: this.changes
-    });
+    res.json({ status: 'ok', deleted: this.changes });
   });
 });
 
 // DELETE /tasks/:id – удалить одну задачу
 router.delete('/:id', (req, res) => {
   const id = Number(req.params.id);
-    // ⚠️ Уязвимость SQL injection
-  const sql = `DELETE FROM tasks WHERE id = ${id}`;
-  db.run(sql, function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ status: 'ok', message: 'Задача удалена' });
+  if (isNaN(id) || id <= 0) {
+    return res.status(400).json({ error: 'Invalid ID' });
+  }
+
+  const sql = 'DELETE FROM tasks WHERE id = ?';
+  db.run(sql, [id], function(err) {
+    if (err) {
+      console.error(err.message);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    res.json({ status: 'ok' });
   });
 });
+
 
 
 module.exports = router;
