@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/css/style.css">
+  <title>To-Do App (уязвимый)</title>
+</head>
+<body>
+  <div class="blok_text">
+    <h1 class="text_1">to-do</h1>
+    <form id="todo-form">
+      <input type="text" placeholder="введите текст задачи:" class="input1" id="task-input" maxlength="250">
+      <br>
+      <button type="submit" class="input2" id="add-btn">закрепить задачу</button>
+    </form>
+  </div>
+
+  <div class="blok_task">
+    <h2 class="text_h">Список задач:</h2>
+
+    <!-- Вкладки -->
+    <div class="tabs">
+      <button class="tab active" data-filter="all">Все <span id="count-all">0</span></button>
+      <button class="tab" data-filter="active">Активные <span id="count-active">0</span></button>
+      <button class="tab" data-filter="completed">Завершённые <span id="count-completed">0</span></button>
+    </div>
+
+    <!-- Глобальный чекбокс и кнопка удаления выполненных -->
+    <div class="global-actions">
+      <label>
+        <input type="checkbox" id="select-all"> Выбрать все (выполнить/снять)
+      </label>
+      <button id="delete-completed" class="input3">Удалить все выполненные</button>
+    </div>
+
+    <!-- Контейнер для списка задач -->
+    <div id="tasks-container"></div>
+
+    <!-- Пагинация -->
+    <div class="pagination">
+      <button id="prev-page" disabled>← Предыдущая</button>
+      <span>Страница <span id="current-page">1</span></span>
+      <button id="next-page">Следующая →</button>
+    </div>
+
+    <!-- Кнопка "Удалить все задачи" (оставим из старого интерфейса) -->
+    <input type="submit" value="Удалить все задачи" class="input3" id="delete-all">
+  </div>
+
+  <script src="/js/script.js"></script>
+</body>
+</html>
