@@ -13,7 +13,7 @@ const rateLimit = require('express-rate-limit');
 // Лимитер для всех маршрутов (максимум 100 запросов в минуту с одного IP)
 const limiter = rateLimit({
   windowMs: 60 * 1000, // 1 минута
-  max: 100,            // максимум 100 запросов
+  max: 500,            // максимум 100 запросов
   message: { error: 'Слишком много запросов, попробуйте позже.' },
   standardHeaders: true, // возвращать информацию о лимите в заголовках RateLimit-*
   legacyHeaders: false,
